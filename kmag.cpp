@@ -45,6 +45,7 @@
 #include <KShortcutsDialog>
 #include <KToggleAction>
 #include <KXMLGUIFactory>
+#include <KWindowSystem>
 #include <KIO/FileCopyJob>
 
 // application specific includes
@@ -177,6 +178,14 @@ void KmagApp::initActions()
   m_modeFollowFocus->setWhatsThis(i18n("If selected, the area around the keyboard cursor is magnified"));
 
 #endif
+
+  m_modeEdgeDocked = new KToggleAction(QIcon::fromTheme(QStringLiteral( "edgedock" )), i18n("&Edge Docked Mode"), this);
+  actionCollection()->addAction(QStringLiteral( "mode_edgedock" ), m_modeEdgeDocked);
+  connect(m_modeEdgeDocked, &QAction::triggered, this, &KmagApp::slotModeEdgeDocked);
+  actionCollection()->setDefaultShortcut(m_modeEdgeDocked, Qt::Key_F9);
+  m_modeEdgeDocked->setIconText(i18n("Docked"));
+  m_modeEdgeDocked->setToolTip(i18n("Docks the zoomed view to the screen edges"));
+  m_modeEdgeDocked->setWhatsThis(i18n("If selected, the zoomed view will be docked at the edges of the screen"));
 
   m_modeSelWin = new KToggleAction(QIcon::fromTheme(QStringLiteral( "window" )), i18n("Se&lection Window Mode"), this);
   actionCollection()->addAction(QStringLiteral( "mode_selectionwindow" ), m_modeSelWin);
@@ -324,6 +333,11 @@ void KmagApp::saveOptions()
      cg.writeEntry("Mode", "wholescreen");
   else if (m_modeSelWin->isChecked())
      cg.writeEntry("Mode", "selectionwindow");
+  else if (m_modeEdgeDocked->isChecked())
+     cg.writeEntry("Mode", "edgedock");
+  // Edge dcoked mode specific settings
+  cg.writeEntry("EdgePosition", m_edgePosition);
+  cg.writeEntry("EdgeSize", m_edgeSize);
 }
 
 
@@ -373,6 +387,8 @@ void KmagApp::readOptions()
     slotModeWholeScreen();
   } else if (mode == QLatin1String( "selectionwindow" )) {
     slotModeSelWin();
+  } else if (mode == QLatin1String( "edgedock" )) {
+    slotModeEdgeDocked();
   } else if (mode == QLatin1String( "followfocus" )) {
     m_modeFollowFocus->setChecked(true);
     slotModeChanged();
@@ -380,6 +396,9 @@ void KmagApp::readOptions()
     m_modeFollowMouse->setChecked(true);
     slotModeChanged();
   }
+
+  m_edgePosition = cg.readEntry("EdgePosition", 0);
+  m_edgeSize = cg.readEntry("EdgeSize", 200);
 
   QRect defaultRect(0,0,211,164);
   m_zoomView->setSelRectPos(cg.readEntry("SelRect", defaultRect));
@@ -710,6 +729,56 @@ void KmagApp::slotModeChanged()
 #endif
 
   }
+}
+
+void KmagApp::slotModeEdgeDocked()
+{
+  if (m_modeEdgeDocked->isChecked()) {
+    // TODO Currently docking to the top edge with 200px
+    // Can ask the user for that input
+    m_edgeSize = 200;
+    setEdgeDockedMode(1);
+  } else {
+    unsetEdgeDockedMode();
+  }
+}
+
+void KmagApp::setEdgeDockedMode(int position) {
+  m_modeEdgeDocked->setChecked(true);
+  m_pShowMenu->setChecked(false);
+  m_staysOnTop->setChecked(true);
+  m_modeFollowMouse->setChecked(true);
+#ifdef QAccessibilityClient_FOUND
+    m_modeFollowFocus->setChecked(true);
+#endif
+  slotModeChanged();
+  slotShowMenu();
+  slotStaysOnTop();
+
+  m_zoomView->setFitToWindow(true);
+  KWindowSystem::setType(winId(), NET::Dock);
+  KWindowSystem::setState(winId(), NET::Sticky | NET::KeepBelow | NET::SkipTaskbar | NET::SkipPager | NET::MaxHoriz);
+  KWindowSystem::setOnAllDesktops(winId(), true);
+
+  QRect r = QApplication::desktop()->screenGeometry( this );
+  r.setBottom(r.top()+m_edgeSize);
+  setGeometry(r);
+  KWindowSystem::setExtendedStrut (winId(), 0, 0, 0, 0, 0, 0,
+                            m_edgeSize, r.left(), r.right(), 0, 0, 0);
+  show();
+}
+
+void KmagApp::unsetEdgeDockedMode ()
+{
+  m_modeEdgeDocked->setChecked(false);
+  m_pShowMenu->setChecked(true);
+  m_zoomView->setFitToWindow(false);
+  KWindowSystem::setType(winId(), NET::Normal);
+  KWindowSystem::setExtendedStrut(winId(), 0, 100, 600, 0, 100, 500, 0, 100, 500, 0, 100, 500);
+  show();
+  slotModeChanged();
+  slotShowMenu();
+  slotStaysOnTop();
 }
 
 void KmagApp::slotToggleHideCursor()

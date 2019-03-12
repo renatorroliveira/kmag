@@ -25,6 +25,7 @@ find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS
     I18n
     KIO
     XmlGui
+    WindowSystem
 )
 
 find_package(QAccessibilityClient 0.4 CONFIG)
@@ -70,6 +71,7 @@ target_link_libraries(kmag
     KF5::KIOCore
     KF5::I18n
     KF5::XmlGui
+    KF5::WindowSystem
 )
 if(QAccessibilityClient_FOUND)
     target_link_libraries(kmag ${QACCESSIBILITYCLIENT_LIBRARY})

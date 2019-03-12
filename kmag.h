@@ -108,6 +108,7 @@ class KmagApp : public KXmlGuiWindow
     void slotModeChanged();
     void slotModeWholeScreen();
     void slotModeSelWin();
+    void slotModeEdgeDocked();
 
     /// Zooms in
     void zoomIn();
@@ -192,6 +193,16 @@ class KmagApp : public KXmlGuiWindow
     KToggleAction *m_pShowMenu;
     KSelectAction *m_pZoomBox, *m_pRotationBox, *m_pFPSBox, *m_pColorBox;
 
+
+    void setEdgeDockedMode(int);
+    void unsetEdgeDockedMode();
+
+    /// In which side of the screen the zoomed view will be docked.
+    unsigned int m_edgePosition;
+
+    /// The size in pixels of the docked zoomed view.
+    unsigned int m_edgeSize;
+
     /// Current index into the zoomArray
     unsigned int m_zoomIndex;
 
@@ -218,7 +229,7 @@ class KmagApp : public KXmlGuiWindow
 
   KMagZoomView* m_zoomView;
   KToggleAction *m_hideCursor, *m_staysOnTop;
-  KToggleAction *m_modeFollowMouse, *m_modeFollowFocus, *m_modeWholeScreen, *m_modeSelWin;
+  KToggleAction *m_modeFollowMouse, *m_modeFollowFocus, *m_modeWholeScreen, *m_modeSelWin, *m_modeEdgeDocked;
 
   /// Stores the non-zero cursor type to be used
   unsigned int m_mouseCursorType;
