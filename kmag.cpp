@@ -53,11 +53,10 @@
 #include "kmagselrect.h"
 
 
-KmagApp::KmagApp(QWidget* , const char* name)
+KmagApp::KmagApp(QWidget*)
   : KXmlGuiWindow(nullptr) // Qt::WStyle_MinMax | Qt::WType_TopLevel | Qt::WDestructiveClose | Qt::WStyle_ContextHelp | Qt::WindowCloseButtonHint | Qt::WStyle_StaysOnTop
   , m_defaultMouseCursorType(2)
 {
-  setObjectName( QLatin1String( name ) );
   setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint);
   config=KSharedConfig::openConfig();
 
@@ -99,10 +98,6 @@ KmagApp::KmagApp(QWidget* , const char* name)
 
   // read options from config file
   readOptions();
-
-  #ifndef QT_NO_PRINTER
-  m_printer = nullptr;
-  #endif // QT_NO_PRINTER
 }
 
 /**
