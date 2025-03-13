@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QImageWriter>
 #include <QMenuBar>
@@ -27,6 +28,7 @@
 #include <KSelectAction>
 #include <KShortcutsDialog>
 #include <KToggleAction>
+#include <KWindowSystem>
 #include <KXMLGUIFactory>
 #include <KIO/FileCopyJob>
 
