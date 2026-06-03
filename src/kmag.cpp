@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QImageWriter>
 #include <QMenuBar>
@@ -27,6 +28,7 @@
 #include <KSelectAction>
 #include <KShortcutsDialog>
 #include <KToggleAction>
+#include <KWindowSystem>
 #include <KXMLGUIFactory>
 #include <KIO/FileCopyJob>
 
@@ -51,11 +53,11 @@ KmagApp::KmagApp(QWidget*)
 
   fpsArrayString << i18nc("Zoom at very low", "&Very Low") << i18nc("Zoom at low", "&Low") << i18nc("Zoom at medium", "&Medium") << i18nc("Zoom at high", "&High") << i18nc("Zoom at very high", "V&ery High");
 
-  fpsArray.append(2); // very low
-  fpsArray.append(6); // low
-  fpsArray.append(10); // medium
-  fpsArray.append(15); // high
-  fpsArray.append(25); // very high
+  fpsArray.append(5); // very low
+  fpsArray.append(10); // low
+  fpsArray.append(20); // medium
+  fpsArray.append(30); // high
+  fpsArray.append(60); // very high
 
   colorArrayString << i18nc("No color-blindness simulation, i.e. 'normal' vision", "&Normal") << i18n("&Protanopia") << i18n("&Deuteranopia") << i18n("&Tritanopia") << i18n("&Achromatopsia");
 

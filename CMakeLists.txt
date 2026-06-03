@@ -29,6 +29,7 @@ find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     Core
     Widgets
     PrintSupport
+    DBus
 )
 
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
@@ -36,6 +37,8 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
     KIO
     XmlGui
     Crash
+    WindowSystem
+    Config
 )
 
 if (BUILD_DOC)
@@ -53,6 +56,23 @@ set_package_properties(QAccessibilityClient6 PROPERTIES
     TYPE OPTIONAL
     PURPOSE "Required to enable keyboard focus tracking."
 )
+
+option(KMAG_WITH_PIPEWIRE "Build the Wayland PipeWire/portal screen-capture backend" ON)
+
+if(KMAG_WITH_PIPEWIRE)
+    find_package(PkgConfig)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(PipeWire IMPORTED_TARGET libpipewire-0.3>=1.0.0)
+        pkg_check_modules(Spa IMPORTED_TARGET libspa-0.2>=0.2)
+    endif()
+    if(NOT PkgConfig_FOUND OR NOT PipeWire_FOUND OR NOT Spa_FOUND)
+        message(STATUS "PipeWire/SPA not found; disabling KMAG_WITH_PIPEWIRE")
+        set(KMAG_WITH_PIPEWIRE OFF)
+    endif()
+endif()
+
+add_feature_info(KMAG_WITH_PIPEWIRE KMAG_WITH_PIPEWIRE
+    "Wayland screen capture via XDG ScreenCast portal + PipeWire")
 
 ecm_set_disabled_deprecation_versions(QT 6.9.0  KF 6.18.0)
 

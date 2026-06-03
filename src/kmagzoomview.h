@@ -28,6 +28,8 @@
 #include <qaccessibilityclient/registry.h>
 #endif
 
+class ScreenCaptureManager;
+
 /**
  * The KMagZoomView class provides the view widget for the KmagApp instance.
  *
@@ -184,6 +186,12 @@ class KMagZoomView : public QAbstractScrollArea
 
     /// Stores the pixmap which is recolored from the grabbed one
     QPixmap m_coloredPixmap;
+
+    /// Active screen-capture backend (X11 / PipeWire)
+    ScreenCaptureManager *m_capture = nullptr;
+
+    /// Ensures the capture-error popup is shown at most once
+    bool m_captureErrorShown = false;
 
     /// The selected rectangle which is to be grabbed
     KMagSelRect m_selRect;

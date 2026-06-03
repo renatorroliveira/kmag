@@ -7,12 +7,14 @@
 // application specific includes
 #include "kmagzoomview.h"
 #include "colorsim.h"
+#include "screencapture/screencapturemanager.h"
 
 // include files for Qt
 #include <QApplication>
 #include <QBitmap>
 #include <QScrollBar>
-#include <QScreen>
+#include <QImage>
+#include <QMessageBox>
 #include <QPainter>
 
 // include files for KF5
@@ -86,6 +88,24 @@ KMagZoomView::KMagZoomView(QWidget *parent, const char *name)
   // init the zoom matrix
   setupMatrix();
 
+  // create the screen-capture backend for this session and surface failures once
+  m_capture = ScreenCaptureManager::create(this);
+  if (m_capture) {
+    connect(m_capture, &ScreenCaptureManager::captureError, this,
+            [this](const QString &message) {
+      if (m_captureErrorShown) {
+        return;
+      }
+      m_captureErrorShown = true;
+      QMessageBox::warning(window(), i18n("Screen Capture Unavailable"),
+        i18n("KMag could not capture the screen:\n%1\n\n"
+             "On Wayland, KMag needs screen-capture permission to function. "
+             "Please grant access when prompted, or check your desktop "
+             "portal configuration.", message));
+    });
+    m_capture->start();
+  }
+
   m_ctrlKeyPressed = false;
   m_shiftKeyPressed = false;
   m_refreshSwitch = true;
@@ -121,6 +141,9 @@ KMagZoomView::KMagZoomView(QWidget *parent, const char *name)
 
 KMagZoomView::~KMagZoomView()
 {
+  if (m_capture) {
+    m_capture->stop();
+  }
 }
 
 int KMagZoomView::contentsX() const
@@ -423,7 +446,11 @@ QPoint KMagZoomView::calcMousePos(bool updateMousePos)
 {
   // get position of mouse wrt selRect
   if(updateMousePos) { // get a new position only if asked
-    m_latestCursorPos = QCursor::pos();
+    // Read through the capture backend: on Wayland QCursor::pos() is frozen
+    // whenever the pointer is over another surface, so the PipeWire backend
+    // returns the stream's cursor-metadata position instead. X11 keeps
+    // QCursor::pos() via the base implementation.
+    m_latestCursorPos = m_capture ? m_capture->getCursorPosition() : QCursor::pos();
     m_latestCursorPos -= QPoint(m_selRect.x(), m_selRect.y());
   }
 
@@ -906,8 +933,11 @@ void KMagZoomView::grabFrame()
     QPoint newCenter;
 
     if(m_followMouse) {
-        // set new center to be the current mouse position
-        newCenter = QCursor::pos();
+        // set new center to be the current mouse position. Read through the
+        // capture backend so Wayland uses the stream's cursor-metadata position
+        // (QCursor::pos() is frozen off our own window there); X11 keeps
+        // QCursor::pos() via the base implementation.
+        newCenter = m_capture ? m_capture->getCursorPosition() : QCursor::pos();
 #if HAVE_QACCESSIBILITYCLIENT
     } else if(m_followFocus) {
         // set the new center to the current keyboard cursor position
@@ -947,32 +977,9 @@ void KMagZoomView::grabFrame()
   // define a normalized rectangle
   QRect selRect = m_selRect.normalized();
 
-  auto cursorPos = QCursor::pos();
-  {
-    // The cursor position (QPoint) for some reason may be equal to the width or height of the screen,
-    // for example (1920, foo) or (bar, 1080) for Full HD. At the same time, the geometry rectangle (QRect)
-    // due to the 0-based coordinate system will not actually contain such point -- the QRect::contains()
-    // method will always return false, which is incorrect in our case. Therefore, we forcibly "project"
-    // the coordinates of the cursor position into the screen geometry rectangle.
-    auto vg = qApp->primaryScreen()->virtualGeometry();
-    cursorPos.rx() = qBound(vg.left(), cursorPos.x(), vg.right());
-    cursorPos.ry() = qBound(vg.top(), cursorPos.y(), vg.bottom());
-  }
-
-  auto screen = qApp->primaryScreen();
-  for (auto s : qApp->screens()) {
-    if (s->geometry().contains(cursorPos)) {
-      screen = s;
-      break;
-    }
-  }
-
-  // grab screenshot from the screen and put it in the pixmap
-  m_coloredPixmap = screen->grabWindow(
-    0,  // WId == 0 is interpreted as the root window / desktop
-    selRect.x() - screen->geometry().left(),
-    selRect.y() - screen->geometry().top(),
-    selRect.width(), selRect.height());
+  // grab the selected region via the active capture backend
+  QImage frame = m_capture ? m_capture->getFrame(selRect) : QImage();
+  m_coloredPixmap = QPixmap::fromImage(frame);
 
   // colorize the grabbed pixmap
   if (m_colormode != 0)
