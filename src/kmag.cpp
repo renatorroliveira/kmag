@@ -7,12 +7,13 @@
 #include "kmag.h"
 
 // include files for Qt
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
-#include <QDockWidget>
 #include <QFileDialog>
 #include <QImageWriter>
+#include <QMenu>
 #include <QMenuBar>
 #include <QPainter>
 #include <QPrintDialog>
@@ -28,7 +29,6 @@
 #include <KSelectAction>
 #include <KShortcutsDialog>
 #include <KToggleAction>
-#include <KWindowSystem>
 #include <KXMLGUIFactory>
 #include <KIO/FileCopyJob>
 
@@ -79,6 +79,16 @@ KmagApp::KmagApp(QWidget*)
   initActions();
   initConnections();
 
+  // Docked mode controller: requires both the zoom view (initView) and the
+  // dock actions (initActions) to already exist.
+  m_dockController = new DockController(this, m_zoomView, this);
+  if (!m_dockController->isAvailable()) {
+      m_dockMode->setEnabled(false);
+      m_dockMode->setToolTip(i18n("Docked mode is not available in this session "
+                                  "(needs X11, or a Wayland build with LayerShellQt)."));
+  }
+  setDockEdgeActionsEnabled(false);
+
   // read options from config file
   readOptions();
 }
@@ -88,7 +98,11 @@ KmagApp::KmagApp(QWidget*)
  */
 KmagApp::~KmagApp()
 {
-    m_zoomView->showSelRect(false);
+    // m_zoomView is null here if we closed while docked (queryClose deleted the
+    // orphaned top-level view and cleared the pointer); guard against that.
+    if (m_zoomView) {
+        m_zoomView->showSelRect(false);
+    }
 
     #ifndef QT_NO_PRINTER
     delete m_printer;
@@ -221,6 +235,42 @@ void KmagApp::initActions()
   m_pColorBox->setWhatsThis(i18n("Select a mode to simulate various types of color-blindness."));
   m_pColorBox->setToolTip(i18n("Color-blindness Simulation Mode"));
 
+  // --- Docked mode ---
+  m_dockMode = new KToggleAction(QIcon::fromTheme(QStringLiteral("view-split-top-bottom")),
+                                 i18n("Dock to Screen &Edge"), this);
+  actionCollection()->addAction(QStringLiteral("mode_dock"), m_dockMode);
+  connect(m_dockMode, &QAction::toggled, this, &KmagApp::slotToggleDock);
+  actionCollection()->setDefaultShortcut(m_dockMode, Qt::Key_F9);
+  // The docked strip is a NET::Dock top-level that cannot take keyboard focus
+  // on X11, so F9 must be application-wide to remain usable while docked.
+  m_dockMode->setShortcutContext(Qt::ApplicationShortcut);
+  m_dockMode->setIconText(i18n("Dock"));
+  m_dockMode->setToolTip(i18n("Dock the magnified view to a screen edge and reserve that space"));
+  m_dockMode->setWhatsThis(i18n("If selected, the magnified view is docked to a screen edge "
+                                "and reserves that strip of screen space, like a panel."));
+
+  m_dockEdgeGroup = new QActionGroup(this);
+  m_dockEdgeGroup->setExclusive(true);
+
+  m_dockEdgeTop = new KToggleAction(i18n("Dock to &Top Edge"), this);
+  actionCollection()->addAction(QStringLiteral("dock_edge_top"), m_dockEdgeTop);
+  m_dockEdgeGroup->addAction(m_dockEdgeTop);
+  m_dockEdgeTop->setChecked(true);
+
+  m_dockEdgeBottom = new KToggleAction(i18n("Dock to &Bottom Edge"), this);
+  actionCollection()->addAction(QStringLiteral("dock_edge_bottom"), m_dockEdgeBottom);
+  m_dockEdgeGroup->addAction(m_dockEdgeBottom);
+
+  m_dockEdgeLeft = new KToggleAction(i18n("Dock to &Left Edge"), this);
+  actionCollection()->addAction(QStringLiteral("dock_edge_left"), m_dockEdgeLeft);
+  m_dockEdgeGroup->addAction(m_dockEdgeLeft);
+
+  m_dockEdgeRight = new KToggleAction(i18n("Dock to &Right Edge"), this);
+  actionCollection()->addAction(QStringLiteral("dock_edge_right"), m_dockEdgeRight);
+  m_dockEdgeGroup->addAction(m_dockEdgeRight);
+
+  connect(m_dockEdgeGroup, &QActionGroup::triggered, this, &KmagApp::slotDockEdgeChanged);
+
   setupGUI(ToolBar | Keys | Save | Create);
 }
 
@@ -303,6 +353,13 @@ void KmagApp::saveOptions()
      cg.writeEntry("Mode", "wholescreen");
   else if (m_modeSelWin->isChecked())
      cg.writeEntry("Mode", "selectionwindow");
+
+  if (m_dockController) {
+    cg.writeEntry("Docked", m_dockController->isDocked());
+    cg.writeEntry("DockEdge", static_cast<int>(m_dockController->edge()));
+    cg.writeEntry("DockThickness", m_dockController->thickness());
+    cg.writeEntry("DockScreen", m_dockController->screenName());
+  }
 }
 
 
@@ -372,11 +429,43 @@ void KmagApp::readOptions()
 
   // XMLGui has already read and set up the menuBar for us
   m_pShowMenu->setChecked(menuBar()->isVisible());
+
+  if (m_dockController) {
+    const int edgeInt = cg.readEntry("DockEdge", static_cast<int>(DockingManager::Edge::Top));
+    const DockingManager::Edge edge =
+        (edgeInt >= 0 && edgeInt <= 3) ? static_cast<DockingManager::Edge>(edgeInt)
+                                       : DockingManager::Edge::Top;
+    const int thickness = cg.readEntry("DockThickness", 300);
+    const QString screenName = cg.readEntry("DockScreen", QString());
+    m_dockController->configure(edge, thickness, screenName);
+    setDockEdgeChecked(edge);
+
+    if (cg.readEntry("Docked", false) && m_dockController->isAvailable()) {
+      // Defer until the event loop is running so screens/geometry are settled.
+      QMetaObject::invokeMethod(this, [this] {
+        QSignalBlocker block(m_dockMode);
+        m_dockMode->setChecked(true);
+        m_dockController->enterDock();
+      }, Qt::QueuedConnection);
+    }
+  }
 }
 
 bool KmagApp::queryClose()
 {
+  // Persist the live docked state first so a docked session is restored on the
+  // next launch; then tear the dock down so the strip top-level isn't orphaned
+  // and the reserved strut is released.
   saveOptions();
+  if (m_dockController && m_dockController->isDocked()) {
+    // Tear the dock down WITHOUT reparenting (that corrupts the native surface
+    // and double-frees at teardown). While docked the zoom view is an orphan
+    // top-level, so destroy it ourselves; the dock control panel is the main
+    // window's central widget and is destroyed automatically with the window.
+    m_dockController->prepareForClose();
+    m_zoomView->deleteLater();
+    m_zoomView = nullptr;
+  }
   return (true);
 }
 
@@ -611,6 +700,11 @@ void KmagApp::slotToggleRefresh()
 
 void KmagApp::slotModeWholeScreen()
 {
+  if (m_dockController && m_dockController->isDocked()) {
+    QSignalBlocker block(m_dockMode);
+    m_dockMode->setChecked(false);
+    m_dockController->exitDock();
+  }
   m_zoomView->followMouse(false);
   m_zoomView->setSelRectPos(screen()->virtualGeometry());
   m_zoomView->showSelRect(false);
@@ -639,6 +733,82 @@ void KmagApp::slotModeSelWin()
 #endif
   m_modeWholeScreen->setChecked(false);
   m_modeSelWin->setChecked(true);
+}
+
+void KmagApp::slotToggleDock(bool checked)
+{
+  if (!m_dockController || !m_dockController->isAvailable()) {
+    QSignalBlocker block(m_dockMode);
+    m_dockMode->setChecked(false);
+    return;
+  }
+
+  if (checked) {
+    // Docking is incompatible with Whole Screen: fall back to Follow Mouse first.
+    if (m_modeWholeScreen->isChecked()) {
+      m_modeFollowMouse->setChecked(true);
+      slotModeChanged();
+    }
+    m_dockController->enterDock();
+  } else {
+    m_dockController->exitDock();
+  }
+}
+
+void KmagApp::slotDockEdgeChanged()
+{
+  if (!m_dockController) {
+    return;
+  }
+  DockingManager::Edge edge = DockingManager::Edge::Top;
+  if (m_dockEdgeBottom->isChecked())      edge = DockingManager::Edge::Bottom;
+  else if (m_dockEdgeLeft->isChecked())   edge = DockingManager::Edge::Left;
+  else if (m_dockEdgeRight->isChecked())  edge = DockingManager::Edge::Right;
+  m_dockController->setEdge(edge);
+}
+
+void KmagApp::setDockToggleChecked(bool checked)
+{
+  QSignalBlocker block(m_dockMode);
+  m_dockMode->setChecked(checked);
+}
+
+void KmagApp::setDockEdgeChecked(DockingManager::Edge e)
+{
+  QSignalBlocker block(m_dockEdgeGroup);
+  switch (e) {
+  case DockingManager::Edge::Bottom: m_dockEdgeBottom->setChecked(true); break;
+  case DockingManager::Edge::Left:   m_dockEdgeLeft->setChecked(true);   break;
+  case DockingManager::Edge::Right:  m_dockEdgeRight->setChecked(true);  break;
+  default:                           m_dockEdgeTop->setChecked(true);    break;
+  }
+}
+
+void KmagApp::setDockEdgeActionsEnabled(bool enabled)
+{
+  m_dockEdgeTop->setEnabled(enabled);
+  m_dockEdgeBottom->setEnabled(enabled);
+  m_dockEdgeLeft->setEnabled(enabled);
+  m_dockEdgeRight->setEnabled(enabled);
+}
+
+void KmagApp::popupDockContextMenu(const QPoint &globalPos)
+{
+  KXMLGUIFactory *factory = this->factory();
+  QMenu *popup = static_cast<QMenu *>(factory->container(QStringLiteral("mainPopUp"), this));
+  if (popup) {
+    popup->popup(globalPos);
+  }
+}
+
+void KmagApp::addStripActions(QWidget *strip)
+{
+  strip->addAction(m_dockMode);
+}
+
+void KmagApp::removeStripActions(QWidget *strip)
+{
+  strip->removeAction(m_dockMode);
 }
 
 void KmagApp::slotModeChanged()

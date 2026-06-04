@@ -57,6 +57,14 @@ set_package_properties(QAccessibilityClient6 PROPERTIES
     PURPOSE "Required to enable keyboard focus tracking."
 )
 
+find_package(LayerShellQt 6.5.5 CONFIG)
+set_package_properties(LayerShellQt PROPERTIES
+    DESCRIPTION "Qt component for the Wayland wlr-layer-shell protocol"
+    URL "https://invent.kde.org/plasma/layer-shell-qt"
+    TYPE OPTIONAL
+    PURPOSE "Required for screen-edge docking (docked mode) on Wayland."
+)
+
 option(KMAG_WITH_PIPEWIRE "Build the Wayland PipeWire/portal screen-capture backend" ON)
 
 if(KMAG_WITH_PIPEWIRE)

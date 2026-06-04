@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="kmag" version="16">
+<gui name="kmag" version="18">
  <ToolBar noMerge="1" name="mainToolBar"><text>Main Toolbar</text>
  </ToolBar>
 
@@ -19,6 +19,7 @@
   <Action name="mode_followfocus"/>
   <Action name="mode_selectionwindow"/>
   <Action name="mode_wholescreen"/>
+  <Action name="mode_dock"/>
  </ToolBar>
 
  <MenuBar>
@@ -56,6 +57,13 @@
    <Action name="mode_followfocus"/>
    <Action name="mode_selectionwindow"/>
    <Action name="mode_wholescreen"/>
+   <Action name="mode_dock"/>
+   <Menu name="dock_edge"><text>Dock &amp;Edge</text>
+    <Action name="dock_edge_top"/>
+    <Action name="dock_edge_bottom"/>
+    <Action name="dock_edge_left"/>
+    <Action name="dock_edge_right"/>
+   </Menu>
    <Separator />
    <Action name="hidecursor"/>
    <Action name="staysontop"/>
@@ -90,6 +98,13 @@
    <Action name="mode_followfocus"/>
    <Action name="mode_selectionwindow"/>
    <Action name="mode_wholescreen"/>
+   <Action name="mode_dock"/>
+   <Menu name="dock_edge_popup"><text>Dock &amp;Edge</text>
+    <Action name="dock_edge_top"/>
+    <Action name="dock_edge_bottom"/>
+    <Action name="dock_edge_left"/>
+    <Action name="dock_edge_right"/>
+   </Menu>
    <Separator />
    <Action name="hidecursor"/>
    <Action name="staysontop"/>
