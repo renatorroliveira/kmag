@@ -44,12 +44,12 @@ KmagApp::KmagApp(QWidget*)
   config=KSharedConfig::openConfig();
 
   zoomArrayString << QStringLiteral( "5:1" ) << QStringLiteral( "2:1" ) << QStringLiteral( "1:1" ) << QStringLiteral( "1:1.5" ) << QStringLiteral( "1:2" ) << QStringLiteral( "1:3" ) << QStringLiteral( "1:4" ) << QStringLiteral( "1:5" )
-    << QStringLiteral( "1:6" ) << QStringLiteral( "1:7" ) << QStringLiteral( "1:8" ) << QStringLiteral( "1:12" ) << QStringLiteral( "1:16" ) << QStringLiteral( "1:20" );
+    << QStringLiteral( "1:6" ) << QStringLiteral( "1:7" ) << QStringLiteral( "1:8" ) << QStringLiteral( "1:9" ) << QStringLiteral( "1:10" ) << QStringLiteral( "1:11" ) << QStringLiteral( "1:12" ) << QStringLiteral( "1:16" ) << QStringLiteral( "1:20" );
 
   zoomArray << 0.2 <<0.5 << 1.0;
   zoomArray << 1.5 << 2.0 << 3.0;
   zoomArray << 4.0 << 5.0 << 6.0 << 7.0;
-  zoomArray << 8.0 << 12.0 << 16.0 << 20.0;
+  zoomArray << 8.0 << 9.0 << 10.0 << 11.0 << 12.0 << 16.0 << 20.0;
 
   fpsArrayString << i18nc("Zoom at very low", "&Very Low") << i18nc("Zoom at low", "&Low") << i18nc("Zoom at medium", "&Medium") << i18nc("Zoom at high", "&High") << i18nc("Zoom at very high", "V&ery High");
 
